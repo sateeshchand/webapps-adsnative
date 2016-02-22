@@ -1,6 +1,7 @@
 import os
 import optparse
 import hashlib
+import urllib2
 import redis
 
 from flask import Flask
@@ -17,6 +18,17 @@ app.redis = redis.StrictRedis(
 )
 
 
+def fetch_random_text():
+    req = urllib2.Request(
+        url=app.config['TEXT_API'],
+        headers={'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'}
+    )
+    response = urllib2.urlopen(req)
+    data = json.loads(response.read())
+
+    return data['text_out']
+
+
 def save_text_in_redis(text):
     key = hashlib.md5(text).hexdigest()
     try:
@@ -24,30 +36,21 @@ def save_text_in_redis(text):
     except (redis.exceptions.ConnectionError,
             redis.exceptions.BusyLoadingError):
         return False
-    except Exception, e:
-        print e
+
     return True
 
 
-def fetch_random_text():
-    import urllib2
-    req = urllib2.Request(url=app.config['TEXT_API'],
-        headers={'User-Agent' : 'Mozilla/5.0 (Windows NT 6.1; Win64; x64)'})
-    response = urllib2.urlopen(req)
-    data = json.loads(response.read())
-
-    return data['text_out']
-
-
 @app.route("/")
-def home():
+def main():
     random_text = fetch_random_text()
     text_saved_ok = save_text_in_redis(random_text)
     response_json = json.dumps({
         'text': random_text,
         'savedOk': text_saved_ok
     })
+
     app.logger.info(response_json)
+
     return Response(response_json, status=200, mimetype='application/json')
 
 
